@@ -827,18 +827,28 @@ test('https request with `serverName` option', withHttpsServer(), async (_t, ser
 	assert.strictEqual(servername, 'custom.example.com');
 });
 
-// The built-in `openssl` on macOS does not support negative days.
-{
-	const testFunction = process.platform === 'darwin' ? test.skip : test;
-	testFunction('https request with expired certificate', withHttpsServer({days: -1}), async (_t, _server, got) => {
-		await assert.rejects(
-			got({}),
-			{
-				code: 'CERT_HAS_EXPIRED',
-			},
-		);
+test('https request with expired certificate', async t => {
+	// This public test-only key and certificate avoid relying on OpenSSL accepting negative days.
+	const certificate = await readFile(new URL('fixtures/expired-localhost-cert.pem', import.meta.url));
+	const key = await readFile(new URL('fixtures/expired-localhost-key.pem', import.meta.url));
+	const server = https.createServer({key, cert: certificate}, (_request, response) => {
+		response.end('ok');
 	});
-}
+	await new Promise<void>(resolve => {
+		server.listen(0, 'localhost', resolve);
+	});
+	t.after(async () => {
+		server.closeAllConnections();
+		await closeServer(server);
+	});
+
+	const url = `https://localhost:${(server.address() as net.AddressInfo).port}`;
+	assert.strictEqual((await got(url, {https: {rejectUnauthorized: false}})).body, 'ok');
+	await assert.rejects(
+		got(url, {https: {certificateAuthority: certificate}}),
+		{code: 'CERT_HAS_EXPIRED'},
+	);
+});
 
 test('https request with wrong host', withHttpsServer({commonName: 'not-localhost.com'}), async (_t, _server, got) => {
 	await assert.rejects(
