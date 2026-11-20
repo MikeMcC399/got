@@ -2,6 +2,7 @@ name: CI
 on:
   - push
   - pull_request
+  - workflow_dispatch
 permissions:
   contents: read
 jobs:
@@ -16,11 +17,13 @@ jobs:
           - 24
           - 22
         os:
-          - ubuntu-latest
+          - ubuntu-24.04
+          - ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
+          check-latest: true
       - run: npm install
       - run: npm run test
